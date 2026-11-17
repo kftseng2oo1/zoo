@@ -544,8 +544,49 @@ function buildChick(){
   }
   return { g, root, bodyG, neck, head, wings, legs, tail, eyes, chibi:true, bubbleY:.32 };
 }
-const buildDuck = () => buildBird({ r:.36, legH:.16, legR:.03, neckL:.12, neckR:.1, hr:.18, body:0x9c8f7e, chest:0x7b4a30, wing:0x6f604f, spec:0x3c5fd1, tail:0x2b2b2b, tailL:.5, headCol:0x2e7a4a, neckCol:0x2e7a4a, ring:true, beak:0xe8c547, flat:true, leg:0xf08a24 });
-const buildDuckling = () => buildBird({ r:.17, legH:.07, legR:.018, neckL:.02, neckR:.06, hr:.13, body:0xf2d36b, wing:0xd9b24c, tail:0xf2d36b, tailL:.3, beak:0xe08a2a, flat:true, leg:0xe08a2a });
+// Q 版鴨子：母鴨與小鴨同一個模型，小鴨整體縮小；黃色身體、扁扁的橘色鴨嘴
+function buildChibiDuck(k, baby){
+  const YEL = std(0xffd83a, .7), BELLY = std(0xffeb99, .8), WING = std(0xffc61a, .7), BILL = std(0xff8c1a, .35), BILL2 = std(0xf07a10, .4), LEG = std(0xff8c00, .5);
+  const legH = .16, by = .48;
+  const g = new THREE.Group(), sc = new THREE.Group(), root = new THREE.Group();
+  sc.scale.setScalar(k); g.add(sc); sc.add(root);
+  const bodyG = new THREE.Group(); bodyG.position.y = by; root.add(bodyG);
+  M(SMOOTH, YEL, bodyG, [0,0,0], [.46, .32, .38]);
+  M(SMOOTH, BELLY, bodyG, [.13, -.08, 0], [.3, .2, .3]);
+  const wings = [];
+  for(const s of [1, -1]){
+    const w = new THREE.Group(); w.position.set(-.04, .06, s*.34); w.rotation.x = -s*.15; bodyG.add(w);
+    M(SMOOTH, WING, w, [-.04, -.05, s*.02], [.25, .14, .06]);
+    w.userData.s = s; wings.push(w);
+  }
+  const tail = new THREE.Group(); tail.position.set(-.4, .08, 0); bodyG.add(tail);
+  M(TAILCONE, WING, tail, [0,0,0], [.12, .22, .1], [0, 0, .95]);
+  const neck = new THREE.Group(); neck.position.set(.24, .12, 0); bodyG.add(neck);
+  const head = new THREE.Group(); head.position.set(.07, .24, 0); neck.add(head);
+  M(SMOOTH, YEL, head, [0,0,0], [.27, .26, .26]);
+  M(SMOOTH, BILL, head, [.26, -.04, 0], [.17, .05, .14]);
+  M(SMOOTH, BILL2, head, [.23, -.085, 0], [.13, .03, .11]);
+  for(const [x, y, z, r] of (baby ? [[0, .26, 0, .05], [-.04, .25, .03, .04], [.03, .25, -.03, .04]] : [[-.03, .26, 0, .045], [.01, .29, 0, .035]]))
+    M(SMOOTH, WING, head, [x, y, z], [r, r*1.3, r]);
+  const eyes = [], cheek = new THREE.MeshStandardMaterial({ color:0xff9f9f, roughness:.8, transparent:true, opacity:.7 });
+  for(const s of [1, -1]){
+    const e = new THREE.Group(); e.position.set(.17, .07, s*.15); head.add(e);
+    M(SMOOTH, std(0x1a1a1a, .1), e, [0,0,0], [.042, .046, .042]);
+    M(SPH, WHITE, e, [.03, .018, s*.014], [.013, .013, .013]);
+    eyes.push(e);
+    M(new THREE.CircleGeometry(.045, 14), cheek, head, [.15, -.06, s*.2], [1,1,1], [0, s > 0 ? Math.PI/4 : 3*Math.PI/4, 0]);
+  }
+  const legs = [];
+  for(const s of [1, -1]){
+    const l = new THREE.Group(); l.position.set(.03, legH + .04, s*.14); root.add(l);
+    M(CYL, LEG, l, [0, -legH/2 - .02, 0], [.025, legH + .04, .025]);
+    M(SMOOTH, LEG, l, [.05, -legH - .03, 0], [.09, .02, .07]);
+    legs.push(l);
+  }
+  return { g, root, bodyG, neck, head, wings, legs, tail, eyes, chibi:true, bubbleY:.55*k };
+}
+const buildDuck = () => buildChibiDuck(1, false);
+const buildDuckling = () => buildChibiDuck(.45, true);
 function buildGoose(){
   const P = buildBird({ r:.48, legH:.34, legR:.045, neckL:.62, neckR:.085, hr:.18, body:0xfbfaf5, wing:0xe9e5dc, tail:0xf0ede6, tailL:.6, beak:0xf28a25, leg:0xf28a25 });
   const hr = .18;
@@ -765,8 +806,8 @@ function addAnimal(sp, role, P, pos, opts){
 const sheepA = addAnimal('sheep', 'main', buildSheep(), new V3(3, 0, -8), { hopH:.35, reach:1.25, wspd:1.1, fspd:2, stride:3.4 });
 const hen = addAnimal('chicken', 'main', buildHen(), new V3(-9, 0, 4), { peckDepth:1.1, tilt:.5, hopH:.35, reach:.8, wspd:.9, fspd:2.2, stride:10 });
 for(let i=0;i<3;i++) addAnimal('chicken', 'baby', buildChick(), new V3(-9 + Math.random()*1.5, 0, 4 + Math.random()*1.5), { parent:hen, idx:i, peckDepth:1, tilt:.3, hopH:.15, reach:.35, wspd:1, fspd:2, stride:18 });
-const momDuck = addAnimal('duck', 'main', buildDuck(), POND.clone().add(new V3(1.5, 0, -1)), { water:true, sink:-(.16 + .36*.4), peckDepth:.9, tilt:.25, hopH:.15, reach:.7, wspd:.8, fspd:2.4, stride:6 });
-for(let i=0;i<4;i++) addAnimal('duck', 'baby', buildDuckling(), POND.clone().add(new V3(1.5 - (i+1)*.6, 0, -1)), { parent:momDuck, idx:i, water:true, sink:-(.07 + .17*.4), peckDepth:.9, tilt:.2, hopH:.12, reach:.35, wspd:.9, fspd:2.1, stride:12 });
+const momDuck = addAnimal('duck', 'main', buildDuck(), POND.clone().add(new V3(1.5, 0, -1)), { water:true, sink:-.34, peckDepth:.9, tilt:.25, hopH:.15, reach:.7, wspd:.8, fspd:2.4, stride:6 });
+for(let i=0;i<4;i++) addAnimal('duck', 'baby', buildDuckling(), POND.clone().add(new V3(1.5 - (i+1)*.6, 0, -1)), { parent:momDuck, idx:i, water:true, sink:-.34, peckDepth:.9, tilt:.2, hopH:.12, reach:.35, wspd:.9, fspd:2.1, stride:12 });
 const geese = [
   addAnimal('goose', 'main', buildGoose(), new V3(12.5, 0, -3), { basePitch:.08, peckDepth:1.9, tilt:.35, hopH:.2, reach:1.05, wspd:.8, fspd:1.8, stride:6 }),
   addAnimal('goose', 'main', buildGoose(), new V3(14, 0, -5.5), { basePitch:.08, peckDepth:1.9, tilt:.35, hopH:.2, reach:1.05, wspd:.8, fspd:1.8, stride:6 })
