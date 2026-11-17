@@ -1,5 +1,5 @@
 // 可愛動物園 service worker：先拿快取，背景更新；three.js 從 CDN 載入後也會被快取，可離線遊玩
-const CACHE = 'zoo-v4';
+const CACHE = 'zoo-v5';
 const CORE = ['./', 'index.html', 'manifest.json', 'icon.svg', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png',
   'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js',
   'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js'];
