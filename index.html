@@ -453,12 +453,58 @@ function buildBird(o){
   return { g, root, bodyG, neck, head, wings, legs, tail, bubbleY:hr + .35 };
 }
 
+// Q 版母雞：大頭、圓胖身體、三瓣雞冠、肉垂、腮紅、三色扇形尾羽
+const BEAK4 = new THREE.ConeGeometry(1, 1, 4);
+const TAILCONE = (() => { const g = new THREE.ConeGeometry(1, 1, 12); g.translate(0, .5, 0); return g; })();
+const std = (c, rough = .6) => new THREE.MeshStandardMaterial({ color:c, roughness:rough, metalness:.05 });
 function buildHen(){
-  const P = buildBird({ r:.36, legH:.3, legR:.035, neckL:.14, neckR:.11, hr:.19, body:0xc56b35, wing:0xa4552a, tail:0x4a2e1d, tailL:.9, beak:0xf3b63f, leg:0xf3b63f });
-  const hr = .19;
-  for(let i=0;i<3;i++) M(SPH, 0xe0362f, P.head, [(-.3 + i*.3)*hr, hr*.95, 0], [hr*.25, hr*.3, hr*.12]);
-  M(SPH, 0xe0362f, P.head, [hr*.85, -hr*.55, 0], [hr*.15, hr*.25, hr*.1]);
-  return P;
+  const WHITE_F = std(0xfffcf5), BELLY = std(0xfff1d8, .75), RED = std(0xee3b3b, .4), BEAK = std(0xffab00, .3), LEG = std(0xff8c00, .5);
+  const legH = .3, by = .62;
+  const g = new THREE.Group(), root = new THREE.Group(); g.add(root);
+  const bodyG = new THREE.Group(); bodyG.position.y = by; root.add(bodyG);
+  M(SMOOTH, WHITE_F, bodyG, [0,0,0], [.44, .39, .42]);
+  M(SMOOTH, BELLY, bodyG, [.14, -.07, 0], [.29, .25, .3]);
+  // 翅膀
+  const wings = [];
+  for(const s of [1, -1]){
+    const w = new THREE.Group(); w.position.set(-.02, .06, s*.38); w.rotation.x = -s*.18; bodyG.add(w);
+    M(SMOOTH, WHITE_F, w, [-.03, -.08, s*.02], [.22, .17, .075]);
+    w.userData.s = s; wings.push(w);
+  }
+  // 尾羽：中間藍綠、左右褐色
+  const tail = new THREE.Group(); tail.position.set(-.36, .08, 0); bodyG.add(tail);
+  [[0x1f6650, 0, 1.2, .25], [0x8b5a2b, .38, 1, .45], [0xcd853f, -.38, 1, .45]].forEach(([c, side, len, rough]) => {
+    const f = M(TAILCONE, std(c, rough), tail, [0,0,0], [.11, .42*len, .065], [side, 0, .65 + Math.abs(side)*.15]);
+  });
+  // 頭
+  const neck = new THREE.Group(); neck.position.set(.06, .08, 0); bodyG.add(neck);
+  const head = new THREE.Group(); head.position.set(.1, .2, 0); neck.add(head);
+  M(SMOOTH, WHITE_F, head, [0,0,0], [.29, .29, .29]);
+  M(BEAK4, BEAK, head, [.3, -.03, 0], [.1, .17, .1], [Math.PI/4, 0, -Math.PI/2]);
+  const comb = new THREE.Group(); comb.position.set(0, .25, 0); head.add(comb);
+  M(SMOOTH, RED, comb, [.03, .03, 0], [.084, .1, .05]);
+  M(SMOOTH, RED, comb, [.12, 0, 0], [.06, .066, .033]);
+  M(SMOOTH, RED, comb, [-.07, .012, 0], [.065, .08, .036]);
+  const wattle = new THREE.Group(); wattle.position.set(.25, -.13, 0); head.add(wattle);
+  for(const s of [1, -1]) M(SMOOTH, RED, wattle, [0, -.02, s*.036], [.034, .062, .034]);
+  const eyes = [], cheek = new THREE.MeshStandardMaterial({ color:0xff9999, roughness:.8, transparent:true, opacity:.7 });
+  for(const s of [1, -1]){
+    const e = new THREE.Group(); e.position.set(.21, .036, s*.17); head.add(e);
+    M(SMOOTH, std(0x1a1a1a, .1), e, [0,0,0], [.051, .051, .051]);
+    M(SPH, WHITE, e, [.036, .018, s*.018], [.015, .015, .015]);
+    eyes.push(e);
+    M(new THREE.CircleGeometry(.054, 16), cheek, head, [.18, -.06, s*.22], [1,1,1], [0, s > 0 ? Math.PI/4 : 3*Math.PI/4, 0]);
+  }
+  // 腳：大腿絨毛、細腿、三根腳趾
+  const legs = [];
+  for(const s of [1, -1]){
+    const l = new THREE.Group(); l.position.set(.03, legH, s*.15); root.add(l);
+    M(SMOOTH, WHITE_F, l, [0, .05, 0], [.085, .11, .085]);
+    M(CYL, LEG, l, [0, -legH/2 + .02, 0], [.021, legH, .021]);
+    for(const yaw of [0, .63, -.63]) M(new THREE.CylinderGeometry(.015, .009, .13, 8), LEG, l, [.06*Math.cos(yaw), -legH + .015, -.06*Math.sin(yaw)], [1,1,1], [0, yaw, -Math.PI/2]);
+    legs.push(l);
+  }
+  return { g, root, bodyG, neck, head, wings, legs, tail, comb, wattle, eyes, chibi:true, bubbleY:.55 };
 }
 const buildChick = () => buildBird({ r:.17, legH:.1, legR:.018, neckL:0, neckR:.05, hr:.13, body:0xffe36e, wing:0xffd447, tail:0xffe36e, tailL:.3, beak:0xf59a23, leg:0xf59a23 });
 const buildDuck = () => buildBird({ r:.36, legH:.16, legR:.03, neckL:.12, neckR:.1, hr:.18, body:0x9c8f7e, chest:0x7b4a30, wing:0x6f604f, spec:0x3c5fd1, tail:0x2b2b2b, tailL:.5, headCol:0x2e7a4a, neckCol:0x2e7a4a, ring:true, beak:0xe8c547, flat:true, leg:0xf08a24 });
@@ -680,7 +726,7 @@ function addAnimal(sp, role, P, pos, opts){
   return a;
 }
 const sheepA = addAnimal('sheep', 'main', buildSheep(), new V3(3, 0, -8), { hopH:.35, reach:1.25, wspd:1.1, fspd:2, stride:3.4 });
-const hen = addAnimal('chicken', 'main', buildHen(), new V3(-9, 0, 4), { peckDepth:1.6, tilt:.45, hopH:.25, reach:.7, wspd:.9, fspd:2.2, stride:10 });
+const hen = addAnimal('chicken', 'main', buildHen(), new V3(-9, 0, 4), { peckDepth:1.1, tilt:.5, hopH:.35, reach:.8, wspd:.9, fspd:2.2, stride:10 });
 for(let i=0;i<3;i++) addAnimal('chicken', 'baby', buildChick(), new V3(-9 + Math.random()*1.5, 0, 4 + Math.random()*1.5), { parent:hen, idx:i, peckDepth:1, tilt:.3, hopH:.15, reach:.35, wspd:1, fspd:2, stride:18 });
 const momDuck = addAnimal('duck', 'main', buildDuck(), POND.clone().add(new V3(1.5, 0, -1)), { water:true, sink:-(.16 + .36*.4), peckDepth:.9, tilt:.25, hopH:.15, reach:.7, wspd:.8, fspd:2.4, stride:6 });
 for(let i=0;i<4;i++) addAnimal('duck', 'baby', buildDuckling(), POND.clone().add(new V3(1.5 - (i+1)*.6, 0, -1)), { parent:momDuck, idx:i, water:true, sink:-(.07 + .17*.4), peckDepth:.9, tilt:.2, hopH:.12, reach:.35, wspd:.9, fspd:2.1, stride:12 });
@@ -1133,8 +1179,8 @@ function pet(a){
     addAff('sheep', aff < 50 ? 3 : 2);
   } else if(a.sp === 'chicken'){
     if(a.role === 'baby'){ hop(a); peep(); hearts(a, 1); say(a, pick(['啾啾！', '啾～', '（毛茸茸）']), 1.2); addAff('chicken', 1.5); return; }
-    if(aff < 10 && Math.random() < .5){ a.flapT = .8; cluck(4); say(a, '咕咕咕！（嚇一跳）', 1.4); feathers(a, 0xc56b35); runAway(a, 2.5); addAff('chicken', 1); return; }
-    a.flapT = .6; hop(a); cluck(); feathers(a, 0xc56b35); hearts(a, aff >= 50 ? 3 : 2);
+    if(aff < 10 && Math.random() < .5){ a.flapT = .8; cluck(4); say(a, '咕咕咕！（嚇一跳）', 1.4); feathers(a, 0xfffcf5); runAway(a, 2.5); addAff('chicken', 1); return; }
+    a.flapT = .6; hop(a); cluck(); feathers(a, 0xfffcf5); hearts(a, aff >= 50 ? 3 : 2);
     say(a, pick(HEN_LINES), 1.6); addAff('chicken', aff < 50 ? 2.5 : 2);
   } else if(a.sp === 'duck'){
     if(a.role === 'baby'){ hop(a); peep(); ripple(a.g.position, .5); hearts(a, 1); say(a, '啾啾～', 1.2); addAff('duck', 1.5); return; }
@@ -1548,6 +1594,28 @@ function animBird(a, dt, t, moving){
   P.wings.forEach(w => { const tg = -w.userData.s*ang; w.rotation.x = a.flapT > 0 ? tg : w.rotation.x + (tg - w.rotation.x)*Math.min(1, dt*10); });
   // 尾巴
   P.tail.rotation.y = Math.sin(t*(a.role === 'baby' ? 14 : 5) + a.seed)*.25;
+  if(P.chibi) animChibi(a, dt, t);
+}
+function animChibi(a, dt, t){
+  const P = a.P;
+  const b = 1 + Math.sin(t*3 + a.seed)*.025;
+  P.bodyG.scale.set(b, 1/b, b);
+  P.comb.rotation.x = Math.cos(t*3)*.06;
+  P.wattle.rotation.x = Math.sin(t*3)*.1;
+  a.blinkT = (a.blinkT ?? 3) - dt;
+  let ey = 1;
+  if(a.blinkT < 0){ ey = .1; if(a.blinkT < -.12) a.blinkT = 3.5 + Math.random()*2; }
+  P.eyes.forEach(e => e.scale.y += (ey - e.scale.y)*Math.min(1, dt*25));
+  // 跳起時拉長、起跳與落地時壓扁，翅膀跟著拍
+  let sq = 1;
+  if(a.hopT > 0){
+    const n = 1 - a.hopT/.6;
+    sq = (n < .2 || n > .8) ? .88 : 1.1;
+    if(a.flapT <= 0) P.wings.forEach(w => { w.rotation.x = -w.userData.s*Math.abs(Math.sin(n*Math.PI*4))*.6; });
+  }
+  P.root.scale.x += (1/sq - P.root.scale.x)*Math.min(1, dt*20);
+  P.root.scale.y += (sq - P.root.scale.y)*Math.min(1, dt*20);
+  P.root.scale.z = P.root.scale.x;
 }
 
 function animQuad(a, dt, t, moving){
