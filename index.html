@@ -363,19 +363,28 @@ for(let i=0;i<8;i++){
 })();
 
 // ---------- 動物模型 ----------
+const _po = new THREE.Object3D();
+function setPuff(P, i){
+  const p = P.puffs[i];
+  _po.position.copy(p.pos); _po.rotation.copy(p.rot); _po.scale.setScalar(Math.max(1e-4, p.cur)); _po.updateMatrix();
+  P.puffInst.setMatrixAt(i, _po.matrix);
+}
 function buildSheep(){
   const WOOL = 0xfffcf4, FACE = 0xf6e4cf;
   const g = new THREE.Group();
   const body = new THREE.Group(); body.position.y = 1.15; g.add(body);
   M(SPH, 0xf2dcc3, body, [0,0,0], [.92, .66, .64]);
   const puffs = [], puffG = new THREE.IcosahedronGeometry(1, 1), N = 70;
+  const addPuff = (pos, s, rot) => puffs.push({ pos:new V3(...pos), rot:new THREE.Euler(...rot), s, cur:s, regrowAt:0, visible:true });
   for(let i=0;i<N;i++){
     const y = 1 - (i+.5)/N*2, r = Math.sqrt(1-y*y), th = i*2.39996;
     if(y < -.75) continue;
     const s = .27 + Math.random()*.1;
-    const p = M(puffG, WOOL, body, [Math.cos(th)*r*.95, y*.7, Math.sin(th)*r*.7], [s,s,s], [Math.random()*3, Math.random()*3, 0]);
-    p.userData = { puff:true, s, cur:s, regrowAt:0 }; puffs.push(p);
+    addPuff([Math.cos(th)*r*.95, y*.7, Math.sin(th)*r*.7], s, [Math.random()*3, Math.random()*3, 0]);
   }
+  const puffInst = new THREE.InstancedMesh(puffG, lam(WOOL), puffs.length);
+  puffInst.frustumCulled = false; puffInst.userData.puffInst = true; puffInst.userData.keep = true;
+  body.add(puffInst);
   const tail = M(new THREE.IcosahedronGeometry(.2, 1), WOOL, body, [-1.05, .2, 0]);
   const neck = new THREE.Group(); neck.position.set(.85, .3, 0); body.add(neck);
   const head = new THREE.Group(); head.position.set(.38, .18, 0); neck.add(head);
@@ -403,7 +412,10 @@ function buildSheep(){
     M(CYL, 0x3a2e28, lp, [0, -.72, 0], [.105, .14, .105]);
     legs.push(lp);
   }
-  return { g, root:g, body, puffs, tail, neck, head, eyes, ears, legs, bubbleY:.75 };
+  const P = { g, root:g, body, puffs, puffInst, tail, neck, head, eyes, ears, legs, bubbleY:.75 };
+  puffs.forEach((p, i) => setPuff(P, i));
+  tail.userData.keep = true;
+  return P;
 }
 
 function buildBird(o){
@@ -615,6 +627,41 @@ function buildCat(){
   return P;
 }
 
+// 把同一個部位（同一個父節點）底下、同材質的零件合成一塊；會單獨動或單獨顯示的零件保留
+function mergeParts(P){
+  const keep = new Set();
+  [P.tail, P.tongue, ...(P.mud || [])].forEach(o => { if(o && o.isMesh) keep.add(o); });
+  const parents = [];
+  P.g.traverse(o => { if(o.children.some(c => c.isMesh)) parents.push(o); });
+  const cat = arrs => { const out = new Float32Array(arrs.reduce((n, a) => n + a.length, 0)); let k = 0; for(const a of arrs){ out.set(a, k); k += a.length; } return out; };
+  for(const par of parents){
+    const groups = new Map();
+    for(const c of par.children){
+      if(!c.isMesh || c.isInstancedMesh || keep.has(c) || c.userData.keep || !c.visible) continue;
+      const key = c.material.uuid;
+      if(!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(c);
+    }
+    for(const list of groups.values()){
+      if(list.length < 2) continue;
+      const pos = [], nor = [], uv = [];
+      for(const m of list){
+        m.updateMatrix();
+        const geo = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone();
+        geo.applyMatrix4(m.matrix);
+        pos.push(geo.attributes.position.array); nor.push(geo.attributes.normal.array);
+        uv.push(geo.attributes.uv ? geo.attributes.uv.array : new Float32Array(geo.attributes.position.count*2));
+        geo.dispose(); par.remove(m);
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(cat(pos), 3));
+      geo.setAttribute('normal', new THREE.BufferAttribute(cat(nor), 3));
+      geo.setAttribute('uv', new THREE.BufferAttribute(cat(uv), 2));
+      par.add(new THREE.Mesh(geo, list[0].material));
+    }
+  }
+}
+
 // ---------- 動物實體 ----------
 const animals = [];
 function addAnimal(sp, role, P, pos, opts){
@@ -629,7 +676,7 @@ function addAnimal(sp, role, P, pos, opts){
   a.g.position.copy(pos); a.g.rotation.y = Math.random()*6.28;
   a.g.userData.animal = a;
   if(a.water){ a.P.legs.forEach(l => l.visible = false); }
-  shadowAll(a.g); scene.add(a.g); animals.push(a);
+  mergeParts(a.P); shadowAll(a.g); scene.add(a.g); animals.push(a);
   return a;
 }
 const sheepA = addAnimal('sheep', 'main', buildSheep(), new V3(3, 0, -8), { hopH:.35, reach:1.25, wspd:1.1, fspd:2, stride:3.4 });
@@ -1331,12 +1378,14 @@ function updateBallToy(dt, t){
 let shearCount = 0;
 function tryShear(e){
   setRay(e);
-  const h = ray.intersectObject(sheepA.g, true).find(h => isVisible(h.object));
-  if(!h || !h.object.userData.puff) return;
-  const p = h.object;
-  p.visible = false; p.userData.cur = 0;
-  p.userData.regrowAt = performance.now() + 25000 + Math.random()*15000;
-  const wp = new V3(); p.getWorldPosition(wp);
+  const SP_ = sheepA.P;
+  const h = ray.intersectObject(sheepA.g, true).find(h => isVisible(h.object) && (!h.object.userData.puffInst || SP_.puffs[h.instanceId].visible));
+  if(!h || !h.object.userData.puffInst) return;
+  const p = SP_.puffs[h.instanceId];
+  p.visible = false; p.cur = 0;
+  p.regrowAt = performance.now() + 25000 + Math.random()*15000;
+  setPuff(SP_, h.instanceId); SP_.puffInst.instanceMatrix.needsUpdate = true;
+  const wp = p.pos.clone(); SP_.body.localToWorld(wp);
   bits(wp, 0xfffcf4, 4); snip();
   woolCount++; store.set('wool', woolCount); refreshUI();
   if(++shearCount % 8 === 0){
@@ -1447,10 +1496,12 @@ function animSheep(a, dt, t, moving){
   if(a.hopT > 0) ey = .35;
   P.eyes.forEach(e => e.scale.y = ey);
   const now = performance.now();
-  for(const p of P.puffs){
-    if(!p.visible && now > p.userData.regrowAt){ p.visible = true; p.userData.cur = .01; }
-    if(p.visible && p.userData.cur < p.userData.s){ p.userData.cur = Math.min(p.userData.s, p.userData.cur + dt*.3); p.scale.setScalar(p.userData.cur); }
-  }
+  let dirty = false;
+  P.puffs.forEach((p, i) => {
+    if(!p.visible && now > p.regrowAt){ p.visible = true; p.cur = .01; }
+    if(p.visible && p.cur < p.s){ p.cur = Math.min(p.s, p.cur + dt*.3); setPuff(P, i); dirty = true; }
+  });
+  if(dirty) P.puffInst.instanceMatrix.needsUpdate = true;
 }
 function animBird(a, dt, t, moving){
   const P = a.P;
